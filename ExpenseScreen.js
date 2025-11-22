@@ -19,13 +19,41 @@ export default function ExpenseScreen() {
   const [category, setCategory] = useState('');
   const [note, setNote] = useState('');
   const [date, setDate] = useState('');
+  const [filter, setFilter] = useState('all'); // 'all' | 'week' | 'month'
 
     const loadExpenses = async () => {
     const rows = await db.getAllAsync(
       'SELECT * FROM expenses ORDER BY id DESC;'
     );
-    setExpenses(rows);
+      setExpenses(rows);
   };
+
+    const isSameWeek = (isoDate, ref = new Date()) => {
+      if (!isoDate) return false;
+      const d = new Date(isoDate);
+      const a = new Date(d.getFullYear(), d.getMonth(), d.getDate());
+      const b = new Date(ref.getFullYear(), ref.getMonth(), ref.getDate());
+      // week starts on Sunday
+      const startA = new Date(a);
+      startA.setDate(a.getDate() - a.getDay());
+      const startB = new Date(b);
+      startB.setDate(b.getDate() - b.getDay());
+      return startA.getTime() === startB.getTime();
+    };
+
+    const isSameMonth = (isoDate, ref = new Date()) => {
+      if (!isoDate) return false;
+      const d = new Date(isoDate);
+      return d.getFullYear() === ref.getFullYear() && d.getMonth() === ref.getMonth();
+    };
+
+    const applyFilter = (rows) => {
+      if (!rows) return [];
+      if (filter === 'all') return rows;
+      if (filter === 'week') return rows.filter(r => isSameWeek(r.date));
+      if (filter === 'month') return rows.filter(r => isSameMonth(r.date));
+      return rows;
+    };
 
   const addExpense = async () => {
     const amountNumber = parseFloat(amount);
@@ -115,6 +143,18 @@ export default function ExpenseScreen() {
     <SafeAreaView style={styles.container}>
       <Text style={styles.heading}>Student Expense Tracker</Text>
 
+      <View style={styles.filterRow}>
+        <TouchableOpacity style={[styles.filterButton, filter === 'all' && styles.filterActive]} onPress={() => setFilter('all')}>
+          <Text style={styles.filterText}>All</Text>
+        </TouchableOpacity>
+        <TouchableOpacity style={[styles.filterButton, filter === 'week' && styles.filterActive]} onPress={() => setFilter('week')}>
+          <Text style={styles.filterText}>This Week</Text>
+        </TouchableOpacity>
+        <TouchableOpacity style={[styles.filterButton, filter === 'month' && styles.filterActive]} onPress={() => setFilter('month')}>
+          <Text style={styles.filterText}>This Month</Text>
+        </TouchableOpacity>
+      </View>
+
       <View style={styles.form}>
         <TextInput
           style={styles.input}
@@ -142,6 +182,7 @@ export default function ExpenseScreen() {
           style={styles.input}
           placeholder="Date (YYYY-MM-DD) — leave empty for today"
           placeholderTextColor="#9ca3af"
+          
           value={date}
           onChangeText={setDate}
         />
@@ -150,7 +191,7 @@ export default function ExpenseScreen() {
       </View>
 
       <FlatList
-        data={expenses}
+        data={applyFilter(expenses)}
         keyExtractor={(item) => item.id.toString()}
         renderItem={renderExpense}
         ListEmptyComponent={
@@ -172,6 +213,24 @@ export default function ExpenseScreen() {
     fontWeight: '700',
     color: '#fff',
     marginBottom: 16,
+  },
+  filterRow: {
+    flexDirection: 'row',
+    marginBottom: 12,
+    gap: 8,
+  },
+  filterButton: {
+    paddingVertical: 6,
+    paddingHorizontal: 10,
+    backgroundColor: '#1f2937',
+    borderRadius: 8,
+  },
+  filterActive: {
+    backgroundColor: '#374151',
+  },
+  filterText: {
+    color: '#e5e7eb',
+    fontWeight: '600',
   },
   form: {
     marginBottom: 16,
