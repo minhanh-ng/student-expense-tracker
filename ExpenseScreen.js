@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react';
+import { useMemo } from 'react';
 import {
   SafeAreaView,
   View,
@@ -28,7 +29,9 @@ export default function ExpenseScreen() {
       setExpenses(rows);
   };
 
-    const isSameWeek = (isoDate, ref = new Date()) => {
+    
+
+  const isSameWeek = (isoDate, ref = new Date()) => {
       if (!isoDate) return false;
       const d = new Date(isoDate);
       const a = new Date(d.getFullYear(), d.getMonth(), d.getDate());
@@ -46,7 +49,6 @@ export default function ExpenseScreen() {
       const d = new Date(isoDate);
       return d.getFullYear() === ref.getFullYear() && d.getMonth() === ref.getMonth();
     };
-
     const applyFilter = (rows) => {
       if (!rows) return [];
       if (filter === 'all') return rows;
@@ -54,6 +56,11 @@ export default function ExpenseScreen() {
       if (filter === 'month') return rows.filter(r => isSameMonth(r.date));
       return rows;
     };
+
+    const visibleExpenses = useMemo(() => applyFilter(expenses), [expenses, filter]);
+    const totalVisible = useMemo(() => {
+      return visibleExpenses.reduce((s, r) => s + Number(r.amount || 0), 0);
+    }, [visibleExpenses]);
 
   const addExpense = async () => {
     const amountNumber = parseFloat(amount);
@@ -190,8 +197,13 @@ export default function ExpenseScreen() {
         <Button title="Add Expense" onPress={addExpense} />
       </View>
 
+      <View style={styles.totalRow}>
+        <Text style={styles.totalLabel}>Total</Text>
+        <Text style={styles.totalAmount}>${totalVisible.toFixed(2)}</Text>
+      </View>
+
       <FlatList
-        data={applyFilter(expenses)}
+        data={visibleExpenses}
         keyExtractor={(item) => item.id.toString()}
         renderItem={renderExpense}
         ListEmptyComponent={
@@ -274,6 +286,24 @@ export default function ExpenseScreen() {
     color: '#9ca3af',
     marginTop: 24,
     textAlign: 'center',
+  },
+  totalRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    backgroundColor: '#0f172a',
+    borderRadius: 8,
+    marginBottom: 8,
+  },
+  totalLabel: {
+    color: '#9ca3af',
+    fontWeight: '600',
+  },
+  totalAmount: {
+    color: '#fbbf24',
+    fontWeight: '700',
   },
   footer: {
     textAlign: 'center',
