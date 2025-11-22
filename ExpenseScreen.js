@@ -62,6 +62,17 @@ export default function ExpenseScreen() {
       return visibleExpenses.reduce((s, r) => s + Number(r.amount || 0), 0);
     }, [visibleExpenses]);
 
+    const totalsByCategory = useMemo(() => {
+      const map = {};
+      for (const r of visibleExpenses) {
+        const cat = (r.category || 'Uncategorized').trim() || 'Uncategorized';
+        const amt = Number(r.amount || 0);
+        map[cat] = (map[cat] || 0) + amt;
+      }
+      // convert to array sorted by amount desc
+      return Object.entries(map).map(([category, amount]) => ({ category, amount })).sort((a, b) => b.amount - a.amount);
+    }, [visibleExpenses]);
+
   const addExpense = async () => {
     const amountNumber = parseFloat(amount);
 
@@ -202,6 +213,15 @@ export default function ExpenseScreen() {
         <Text style={styles.totalAmount}>${totalVisible.toFixed(2)}</Text>
       </View>
 
+      {totalsByCategory.length > 0 && (
+        <View style={styles.categoryTotals}>
+          <Text style={styles.categoryHeader}>Category {filter === 'all' ? '(All)' : filter === 'week' ? '(This Week)' : '(This Month)'}:</Text>
+          {totalsByCategory.map((t) => (
+            <Text key={t.category} style={styles.categoryBullet}>• {t.category}: ${t.amount.toFixed(2)}</Text>
+          ))}
+        </View>
+      )}
+
       <FlatList
         data={visibleExpenses}
         keyExtractor={(item) => item.id.toString()}
@@ -304,6 +324,36 @@ export default function ExpenseScreen() {
   totalAmount: {
     color: '#fbbf24',
     fontWeight: '700',
+  },
+  categoryTotals: {
+    marginBottom: 8,
+    padding: 8,
+    backgroundColor: '#0b1220',
+    borderRadius: 8,
+  },
+  categoryHeader: {
+    color: '#e5e7eb',
+    fontWeight: '700',
+    marginBottom: 6,
+  },
+  categoryBullet: {
+    color: '#e5e7eb',
+    marginLeft: 4,
+    marginBottom: 4,
+  },
+  categoryRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    paddingVertical: 4,
+  },
+  categoryName: {
+    color: '#e5e7eb',
+    fontSize: 13,
+  },
+  categoryAmount: {
+    color: '#fbbf24',
+    fontWeight: '600',
+    fontSize: 13,
   },
   footer: {
     textAlign: 'center',
