@@ -18,6 +18,7 @@ export default function ExpenseScreen() {
   const [amount, setAmount] = useState('');
   const [category, setCategory] = useState('');
   const [note, setNote] = useState('');
+  const [date, setDate] = useState('');
 
     const loadExpenses = async () => {
     const rows = await db.getAllAsync(
@@ -26,7 +27,7 @@ export default function ExpenseScreen() {
     setExpenses(rows);
   };
 
-    const addExpense = async () => {
+  const addExpense = async () => {
     const amountNumber = parseFloat(amount);
 
     if (isNaN(amountNumber) || amountNumber <= 0) {
@@ -35,21 +36,25 @@ export default function ExpenseScreen() {
     }
 
     const trimmedCategory = category.trim();
-    const trimmedNote = note.trim();
+  const trimmedNote = note.trim();
+  const trimmedDate = date.trim();
 
     if (!trimmedCategory) {
       // Category is required
       return;
     }
 
+    const dateValue = trimmedDate || new Date().toISOString().slice(0, 10);
+
     await db.runAsync(
-      'INSERT INTO expenses (amount, category, note) VALUES (?, ?, ?);',
-      [amountNumber, trimmedCategory, trimmedNote || null]
+      'INSERT INTO expenses (amount, category, note, date) VALUES (?, ?, ?, ?);',
+      [amountNumber, trimmedCategory, trimmedNote || null, dateValue]
     );
 
     setAmount('');
     setCategory('');
-    setNote('');
+  setNote('');
+  setDate('');
 
     loadExpenses();
   };
@@ -59,12 +64,12 @@ export default function ExpenseScreen() {
     loadExpenses();
   };
 
-    const renderExpense = ({ item }) => (
+  const renderExpense = ({ item }) => (
     <View style={styles.expenseRow}>
       <View style={{ flex: 1 }}>
         <Text style={styles.expenseAmount}>${Number(item.amount).toFixed(2)}</Text>
-        <Text style={styles.expenseCategory}>{item.category}</Text>
-        {item.note ? <Text style={styles.expenseNote}>{item.note}</Text> : null}
+    <Text style={styles.expenseCategory}>{item.category}{item.date ? ` · ${item.date}` : ''}</Text>
+    {item.note ? <Text style={styles.expenseNote}>{item.note}</Text> : null}
       </View>
 
       <TouchableOpacity onPress={() => deleteExpense(item.id)}>
@@ -75,14 +80,30 @@ export default function ExpenseScreen() {
 
     useEffect(() => {
     async function setup() {
+      // Ensure table includes 'date' for new installs
       await db.execAsync(`
         CREATE TABLE IF NOT EXISTS expenses (
           id INTEGER PRIMARY KEY AUTOINCREMENT,
           amount REAL NOT NULL,
           category TEXT NOT NULL,
-          note TEXT
+          note TEXT,
+          date TEXT NOT NULL
         );
       `);
+
+      // For existing databases, check schema and add 'date' column if missing
+      try {
+        const cols = await db.getAllAsync("PRAGMA table_info(expenses);");
+        const hasDate = Array.isArray(cols) && cols.some(c => c.name === 'date');
+        if (!hasDate) {
+          await db.execAsync('ALTER TABLE expenses ADD COLUMN date TEXT;');
+          const today = new Date().toISOString().slice(0, 10);
+          await db.runAsync('UPDATE expenses SET date = ? WHERE date IS NULL OR date = "";', [today]);
+        }
+      } catch (err) {
+        // ALTER may not be supported in some environments or may fail — it's safe to continue
+        console.warn('schema migration check failed', err);
+      }
 
       await loadExpenses();
     }
@@ -117,6 +138,14 @@ export default function ExpenseScreen() {
           value={note}
           onChangeText={setNote}
         />
+        <TextInput
+          style={styles.input}
+          placeholder="Date (YYYY-MM-DD) — leave empty for today"
+          placeholderTextColor="#9ca3af"
+          value={date}
+          onChangeText={setDate}
+        />
+
         <Button title="Add Expense" onPress={addExpense} />
       </View>
 
