@@ -8,6 +8,7 @@ import {
   Button,
   FlatList,
   TouchableOpacity,
+  Modal,
   StyleSheet,
 } from 'react-native';
 import { useSQLiteContext } from 'expo-sqlite';
@@ -21,6 +22,11 @@ export default function ExpenseScreen() {
   const [note, setNote] = useState('');
   const [date, setDate] = useState('');
   const [filter, setFilter] = useState('all'); // 'all' | 'week' | 'month'
+  const [editingExpense, setEditingExpense] = useState(null);
+  const [editAmount, setEditAmount] = useState('');
+  const [editCategory, setEditCategory] = useState('');
+  const [editNote, setEditNote] = useState('');
+  const [editDate, setEditDate] = useState('');
 
     const loadExpenses = async () => {
     const rows = await db.getAllAsync(
@@ -110,18 +116,46 @@ export default function ExpenseScreen() {
     loadExpenses();
   };
 
+  const startEdit = (item) => {
+    setEditingExpense(item);
+    setEditAmount(String(item.amount));
+    setEditCategory(item.category || '');
+    setEditNote(item.note || '');
+    setEditDate(item.date || '');
+  };
+
+  const cancelEdit = () => {
+    setEditingExpense(null);
+  };
+
+  const saveEdit = async () => {
+    if (!editingExpense) return;
+    const id = editingExpense.id;
+    const amountNumber = parseFloat(editAmount);
+    if (isNaN(amountNumber) || amountNumber <= 0) return;
+    const trimmedCategory = editCategory.trim();
+    if (!trimmedCategory) return;
+    const trimmedNote = editNote.trim();
+    const dateValue = editDate.trim() || new Date().toISOString().slice(0,10);
+    await db.runAsync('UPDATE expenses SET amount = ?, category = ?, note = ?, date = ? WHERE id = ?;', [amountNumber, trimmedCategory, trimmedNote || null, dateValue, id]);
+    setEditingExpense(null);
+    await loadExpenses();
+  };
+
   const renderExpense = ({ item }) => (
+    <TouchableOpacity onPress={() => startEdit(item)}>
     <View style={styles.expenseRow}>
       <View style={{ flex: 1 }}>
         <Text style={styles.expenseAmount}>${Number(item.amount).toFixed(2)}</Text>
-    <Text style={styles.expenseCategory}>{item.category}{item.date ? ` · ${item.date}` : ''}</Text>
-    {item.note ? <Text style={styles.expenseNote}>{item.note}</Text> : null}
+        <Text style={styles.expenseCategory}>{item.category}{item.date ? ` · ${item.date}` : ''}</Text>
+        {item.note ? <Text style={styles.expenseNote}>{item.note}</Text> : null}
       </View>
 
       <TouchableOpacity onPress={() => deleteExpense(item.id)}>
         <Text style={styles.delete}>✕</Text>
       </TouchableOpacity>
     </View>
+    </TouchableOpacity>
   );
 
     useEffect(() => {
@@ -208,7 +242,7 @@ export default function ExpenseScreen() {
         <Button title="Add Expense" onPress={addExpense} />
       </View>
 
-      <View style={styles.totalRow}>
+  <View style={styles.totalRow}>
         <Text style={styles.totalLabel}>Total</Text>
         <Text style={styles.totalAmount}>${totalVisible.toFixed(2)}</Text>
       </View>
@@ -221,6 +255,23 @@ export default function ExpenseScreen() {
           ))}
         </View>
       )}
+
+      {/* Edit modal */}
+      <Modal visible={!!editingExpense} animationType="slide" transparent={true}>
+        <View style={styles.modalContainer}>
+          <View style={styles.modalContent}>
+            <Text style={styles.modalTitle}>Edit Expense</Text>
+            <TextInput style={styles.input} keyboardType="numeric" value={editAmount} onChangeText={setEditAmount} placeholder="Amount" placeholderTextColor="#9ca3af" />
+            <TextInput style={styles.input} value={editCategory} onChangeText={setEditCategory} placeholder="Category" placeholderTextColor="#9ca3af" />
+            <TextInput style={styles.input} value={editNote} onChangeText={setEditNote} placeholder="Note (optional)" placeholderTextColor="#9ca3af" />
+            <TextInput style={styles.input} value={editDate} onChangeText={setEditDate} placeholder="Date (YYYY-MM-DD)" placeholderTextColor="#9ca3af" />
+            <View style={styles.modalButtons}>
+              <Button title="Cancel" onPress={cancelEdit} />
+              <Button title="Save" onPress={saveEdit} />
+            </View>
+          </View>
+        </View>
+      </Modal>
 
       <FlatList
         data={visibleExpenses}
@@ -354,6 +405,29 @@ export default function ExpenseScreen() {
     color: '#fbbf24',
     fontWeight: '600',
     fontSize: 13,
+  },
+  modalContainer: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  modalContent: {
+    width: '90%',
+    backgroundColor: '#0b1220',
+    padding: 16,
+    borderRadius: 12,
+  },
+  modalTitle: {
+    color: '#e5e7eb',
+    fontWeight: '700',
+    marginBottom: 8,
+    fontSize: 16,
+  },
+  modalButtons: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginTop: 8,
   },
   footer: {
     textAlign: 'center',
