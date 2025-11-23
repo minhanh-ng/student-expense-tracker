@@ -1,5 +1,4 @@
-import React, { useEffect, useState } from 'react';
-import { useMemo } from 'react';
+import React, { useEffect, useState, useMemo, useRef } from 'react';
 import {
   SafeAreaView,
   View,
@@ -22,11 +21,28 @@ export default function ExpenseScreen() {
   const [note, setNote] = useState('');
   const [date, setDate] = useState('');
   const [filter, setFilter] = useState('all'); // 'all' | 'week' | 'month'
+  const [hasDateColumn, setHasDateColumn] = useState(false);
   const [editingExpense, setEditingExpense] = useState(null);
   const [editAmount, setEditAmount] = useState('');
   const [editCategory, setEditCategory] = useState('');
   const [editNote, setEditNote] = useState('');
   const [editDate, setEditDate] = useState('');
+  const [message, setMessage] = useState('');
+  const [messageVisible, setMessageVisible] = useState(false);
+  const messageTimerRef = useRef(null);
+
+  const showMessage = (text, ms = 3000) => {
+    if (messageTimerRef.current) {
+      clearTimeout(messageTimerRef.current);
+    }
+    setMessage(text);
+    setMessageVisible(true);
+    messageTimerRef.current = setTimeout(() => {
+      setMessageVisible(false);
+      setMessage('');
+      messageTimerRef.current = null;
+    }, ms);
+  };
 
     const loadExpenses = async () => {
     const rows = await db.getAllAsync(
@@ -108,12 +124,14 @@ export default function ExpenseScreen() {
   setNote('');
   setDate('');
 
-    loadExpenses();
+  await loadExpenses();
+  showMessage('Expense added');
   };
 
     const deleteExpense = async (id) => {
     await db.runAsync('DELETE FROM expenses WHERE id = ?;', [id]);
-    loadExpenses();
+    await loadExpenses();
+    showMessage('Expense deleted');
   };
 
   const startEdit = (item) => {
@@ -129,17 +147,46 @@ export default function ExpenseScreen() {
   };
 
   const saveEdit = async () => {
+    // 3B: validate then run parameterized UPDATE
     if (!editingExpense) return;
     const id = editingExpense.id;
+
     const amountNumber = parseFloat(editAmount);
-    if (isNaN(amountNumber) || amountNumber <= 0) return;
+    if (isNaN(amountNumber) || amountNumber <= 0) {
+      console.warn('Invalid amount');
+      return;
+    }
+
     const trimmedCategory = editCategory.trim();
-    if (!trimmedCategory) return;
+    if (!trimmedCategory) {
+      console.warn('Category required');
+      return;
+    }
+
     const trimmedNote = editNote.trim();
-    const dateValue = editDate.trim() || new Date().toISOString().slice(0,10);
-    await db.runAsync('UPDATE expenses SET amount = ?, category = ?, note = ?, date = ? WHERE id = ?;', [amountNumber, trimmedCategory, trimmedNote || null, dateValue, id]);
-    setEditingExpense(null);
-    await loadExpenses();
+    const dateValue = editDate.trim() || new Date().toISOString().slice(0, 10);
+
+    try {
+      if (hasDateColumn) {
+        // Parameterized UPDATE including date
+        await db.runAsync(
+          'UPDATE expenses SET amount = ?, category = ?, note = ?, date = ? WHERE id = ?;',
+          [amountNumber, trimmedCategory, trimmedNote || null, dateValue, id]
+        );
+      } else {
+        // Fallback for older DBs without date column
+        await db.runAsync(
+          'UPDATE expenses SET amount = ?, category = ?, note = ? WHERE id = ?;',
+          [amountNumber, trimmedCategory, trimmedNote || null, id]
+        );
+      }
+
+      setEditingExpense(null);
+  await loadExpenses();
+  showMessage('Expense updated');
+    } catch (err) {
+      console.warn('Failed to save edit', err);
+    }
   };
 
   const renderExpense = ({ item }) => (
@@ -175,10 +222,16 @@ export default function ExpenseScreen() {
       try {
         const cols = await db.getAllAsync("PRAGMA table_info(expenses);");
         const hasDate = Array.isArray(cols) && cols.some(c => c.name === 'date');
+        setHasDateColumn(Boolean(hasDate));
         if (!hasDate) {
-          await db.execAsync('ALTER TABLE expenses ADD COLUMN date TEXT;');
-          const today = new Date().toISOString().slice(0, 10);
-          await db.runAsync('UPDATE expenses SET date = ? WHERE date IS NULL OR date = "";', [today]);
+          try {
+            await db.execAsync('ALTER TABLE expenses ADD COLUMN date TEXT;');
+            const today = new Date().toISOString().slice(0, 10);
+            await db.runAsync('UPDATE expenses SET date = ? WHERE date IS NULL OR date = "";', [today]);
+            setHasDateColumn(true);
+          } catch (innerErr) {
+            console.warn('ALTER TABLE add date failed', innerErr);
+          }
         }
       } catch (err) {
         // ALTER may not be supported in some environments or may fail — it's safe to continue
@@ -285,6 +338,11 @@ export default function ExpenseScreen() {
       <Text style={styles.footer}>
         Enter your expenses and they’ll be saved locally with SQLite.
       </Text>
+      {messageVisible ? (
+        <View style={styles.toast} pointerEvents="none">
+          <Text style={styles.toastText}>{message}</Text>
+        </View>
+      ) : null}
     </SafeAreaView>
   );
 }
@@ -434,5 +492,21 @@ export default function ExpenseScreen() {
     color: '#6b7280',
     marginTop: 12,
     fontSize: 12,
+  },
+  toast: {
+    position: 'absolute',
+    bottom: 24,
+    left: 24,
+    right: 24,
+    backgroundColor: 'rgba(15,23,42,0.95)',
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+    borderRadius: 8,
+    alignItems: 'center',
+    justifyContent: 'center',
+    elevation: 4,
+  },
+  toastText: {
+    color: '#e5e7eb',
   },
 });
