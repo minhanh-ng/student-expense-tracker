@@ -99,7 +99,6 @@ export default function ExpenseScreen() {
     const amountNumber = parseFloat(amount);
 
     if (isNaN(amountNumber) || amountNumber <= 0) {
-      // Basic validation: ignore invalid or non-positive amounts
       return;
     }
 
@@ -108,7 +107,6 @@ export default function ExpenseScreen() {
   const trimmedDate = date.trim();
 
     if (!trimmedCategory) {
-      // Category is required
       return;
     }
 
@@ -147,7 +145,6 @@ export default function ExpenseScreen() {
   };
 
   const saveEdit = async () => {
-    // 3B: validate then run parameterized UPDATE
     if (!editingExpense) return;
     const id = editingExpense.id;
 
@@ -168,13 +165,11 @@ export default function ExpenseScreen() {
 
     try {
       if (hasDateColumn) {
-        // Parameterized UPDATE including date
         await db.runAsync(
           'UPDATE expenses SET amount = ?, category = ?, note = ?, date = ? WHERE id = ?;',
           [amountNumber, trimmedCategory, trimmedNote || null, dateValue, id]
         );
       } else {
-        // Fallback for older DBs without date column
         await db.runAsync(
           'UPDATE expenses SET amount = ?, category = ?, note = ? WHERE id = ?;',
           [amountNumber, trimmedCategory, trimmedNote || null, id]
@@ -207,7 +202,7 @@ export default function ExpenseScreen() {
 
     useEffect(() => {
     async function setup() {
-      // Ensure table includes 'date' for new installs
+      
       await db.execAsync(`
         CREATE TABLE IF NOT EXISTS expenses (
           id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -218,7 +213,6 @@ export default function ExpenseScreen() {
         );
       `);
 
-      // For existing databases, check schema and add 'date' column if missing
       try {
         const cols = await db.getAllAsync("PRAGMA table_info(expenses);");
         const hasDate = Array.isArray(cols) && cols.some(c => c.name === 'date');
@@ -234,7 +228,7 @@ export default function ExpenseScreen() {
           }
         }
       } catch (err) {
-        // ALTER may not be supported in some environments or may fail — it's safe to continue
+        
         console.warn('schema migration check failed', err);
       }
 
@@ -309,7 +303,7 @@ export default function ExpenseScreen() {
         </View>
       )}
 
-      {/* Edit modal */}
+      
       <Modal visible={!!editingExpense} animationType="slide" transparent={true}>
         <View style={styles.modalContainer}>
           <View style={styles.modalContent}>
